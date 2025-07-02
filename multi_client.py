@@ -19,6 +19,7 @@ class MCPMultiClient:
         self.anthropic = Anthropic()
         self.client = None
         self.tools = []
+        self.messages = []  # Store conversation history
 
     async def initialize(self, config_path: str):
         """Load configuration and initialize multi-server client"""
@@ -44,27 +45,28 @@ class MCPMultiClient:
         """Process a query using Claude and available tools"""
         # Use FastMCP client to connect and interact with the servers
         async with self.client:
-            messages = [
-                {
-                    "role": "user",
-                    "content": query
-                }
-            ]
+            # Add user query to conversation history
+            self.messages.append({
+                "role": "user",
+                "content": query
+            })
 
-            # Initial Claude API call
+            # Initial Claude API call with full conversation history
             response = self.anthropic.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-20250514",
                 max_tokens=1000,
-                messages=messages,
+                messages=self.messages,
                 tools=self.available_tools
             )
 
             # Process response and handle tool calls
             final_text = []
+            assistant_content = []
 
             for content in response.content:
                 if content.type == 'text':
                     final_text.append(content.text)
+                    assistant_content.append({"type": "text", "text": content.text})
                 elif content.type == 'tool_use':
                     tool_name = content.name
                     tool_args = content.input
@@ -72,26 +74,51 @@ class MCPMultiClient:
                     # Execute tool call using FastMCP client
                     result = await self.client.call_tool(tool_name, tool_args)
                     final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
-
-                    # Continue conversation with tool results
-                    if hasattr(content, 'text') and content.text:
-                        messages.append({
-                          "role": "assistant",
-                          "content": content.text
-                        })
-                    messages.append({
-                        "role": "user", 
-                        "content": str(result)
+                    
+                    # Add tool use to assistant content
+                    assistant_content.append({
+                        "type": "tool_use",
+                        "id": content.id,
+                        "name": tool_name,
+                        "input": tool_args
                     })
 
-                    # Get next response from Claude
+                    # Add assistant message with tool use
+                    self.messages.append({
+                        "role": "assistant",
+                        "content": assistant_content
+                    })
+                    
+                    # Add tool result
+                    self.messages.append({
+                        "role": "user",
+                        "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": content.id,
+                            "content": str(result)
+                        }]
+                    })
+
+                    # Get next response from Claude with updated history
                     response = self.anthropic.messages.create(
-                        model="claude-3-5-sonnet-20241022",
+                        model="claude-sonnet-4-20250514",
                         max_tokens=1000,
-                        messages=messages,
+                        messages=self.messages,
                     )
 
-                    final_text.append(response.content[0].text)
+                    # Reset assistant content for new response
+                    assistant_content = []
+                    for new_content in response.content:
+                        if new_content.type == 'text':
+                            final_text.append(new_content.text)
+                            assistant_content.append({"type": "text", "text": new_content.text})
+
+            # Add final assistant response to history
+            if assistant_content:
+                self.messages.append({
+                    "role": "assistant",
+                    "content": assistant_content
+                })
 
             return "\n".join(final_text)
 
@@ -100,6 +127,7 @@ class MCPMultiClient:
         print("\nFastMCP Multi-Server Client Started!")
         print("Type your queries or 'quit' to exit.")
         print("Type 'list' to see all available tools.")
+        print("Type 'clear' to clear conversation history.")
         
         while True:
             try:
@@ -112,6 +140,11 @@ class MCPMultiClient:
                     print("\nAvailable tools:")
                     for tool in self.tools:
                         print(f"  - {tool.name}: {tool.description}")
+                    continue
+                
+                if query.lower() == 'clear':
+                    self.messages = []
+                    print("Conversation history cleared.")
                     continue
                     
                 response = await self.process_query(query)
