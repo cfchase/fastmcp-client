@@ -11,4 +11,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["client", "remote_client"]
+py-modules = ["client", "multi_client"]

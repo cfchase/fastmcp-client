@@ -5,14 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a Python FastMCP client project that enables interaction with MCP servers through Claude AI. The codebase provides two client implementations:
-- **client.py**: Stdio-based FastMCP client for local server connections
-- **remote_client.py**: HTTP-based FastMCP client for remote server connections
+- **client.py**: Single-server FastMCP client for stdio connections
+- **multi_client.py**: Multi-server FastMCP client supporting both stdio and HTTP connections
 
 ## Architecture
 
 ### Core Components
 
-1. **MCPClient Class Structure**:
+1. **Client Class Structure**:
    - Uses FastMCP's Client class for simplified connection management
    - Anthropic integration for Claude AI interactions
    - Tool execution pipeline between Claude and MCP servers
@@ -21,8 +21,8 @@ This is a Python FastMCP client project that enables interaction with MCP server
 2. **Connection Flow**:
    - Load environment variables (ANTHROPIC_API_KEY from .env)
    - Initialize Anthropic client
-   - Connect to MCP server using FastMCP Client (stdio or HTTP)
-   - List available tools from server
+   - Connect to MCP server(s) using FastMCP Client
+   - List available tools from server(s)
    - Process queries through Claude with tool access
    - Execute tool calls and return results
 
@@ -36,13 +36,11 @@ This is a Python FastMCP client project that enables interaction with MCP server
 ### Running the Clients
 
 ```bash
-# Run stdio client (connects to npx-based MCP servers)
-python client.py [server-name]
-# Default: kubernetes-mcp-server@latest
+# Run single-server client
+python client.py --command "npx kubernetes-mcp-server@latest"
 
-# Run HTTP client
-python remote_client.py --url http://localhost:8123/mcp
-# Additional headers: --header "Key:Value"
+# Run multi-server client
+python multi_client.py --config config.json
 ```
 
 ### Package Management
@@ -66,22 +64,55 @@ uv pip sync requirements.txt
 - **No test infrastructure**: Tests need to be implemented
 - **Minimal error handling**: Basic try-catch in chat loops only
 
-## Key Changes from MCP to FastMCP
+## Key FastMCP Features Used
 
-- **Simplified Client**: FastMCP's Client class handles all connection complexity
+- **Single Server**: `Client(command_string)` for stdio connections
+- **Multi-Server**: `Client(config_dict)` with `{"mcpServers": {...}}` format
+- **Native Multi-Server Support**: FastMCP automatically handles tool prefixing and routing
 - **Async Context Manager**: Uses `async with Client(...)` pattern for automatic cleanup
-- **Unified Interface**: Same client API works for stdio, HTTP, and SSE connections
 - **Direct Tool Access**: `client.list_tools()` and `client.call_tool()` methods
-- **No Manual Session Management**: FastMCP handles ClientSession internally
-- **Transport Classes**: Use `NpxStdioTransport` for NPX-based servers (stdio client)
 - **Tool Types**: Tools are returned as `mcp.types.Tool` objects with attributes (not dictionaries)
+
+## Client Differences
+
+### client.py (Single Server)
+- Takes command string directly
+- Supports environment variables and working directory
+- Simple stdio-based connections
+- One server per session
+
+### multi_client.py (Multi-Server)
+- Loads configuration from JSON file
+- Supports multiple servers in one session
+- Both stdio and HTTP server types
+- FastMCP handles tool name prefixing with server names
+- Tool calls automatically routed to correct server
+
+## Configuration Format
+
+The multi-server client uses FastMCP's native config format:
+
+```json
+{
+  "mcpServers": {
+    "server_name": {
+      "command": "command",
+      "args": ["arg1", "arg2"]
+    },
+    "http_server": {
+      "url": "http://example.com/mcp"
+    }
+  }
+}
+```
 
 ## Important Notes
 
 - The project is in early development (v0.1.0) with minimal documentation
-- Both clients share similar architecture but use different transport mechanisms
+- Both clients share similar architecture but differ in connection setup
 - Tool schemas are automatically extracted from MCP servers and passed to Claude
 - The chat loop runs continuously until user types 'quit'
+- FastMCP handles all the complexity of multi-server connections internally
 
 ## Git Commit Guidelines
 
