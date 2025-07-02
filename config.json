@@ -1,0 +1,28 @@
+{
+  "servers": [
+    {
+      "name": "kubernetes-server",
+      "type": "npx",
+      "package": "kubernetes-mcp-server@latest",
+      "description": "Kubernetes management server for cluster operations"
+    },
+    {
+      "name": "filesystem-server",
+      "type": "npx", 
+      "package": "@modelcontextprotocol/server-filesystem",
+      "description": "File system operations server"
+    },
+    {
+      "name": "http-server",
+      "type": "http",
+      "url": "http://localhost:8123/mcp",
+      "description": "HTTP-based MCP server"
+    },
+    {
+      "name": "another-http-server",
+      "type": "http",
+      "url": "http://localhost:8124/mcp",
+      "description": "Another HTTP MCP server on different port"
+    }
+  ]
+}
